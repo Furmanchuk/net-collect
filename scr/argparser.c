@@ -6,8 +6,7 @@
 #include <time.h>
 #include <argp.h>
 #include <stdbool.h>
-
-static const short ARG_COUNT = 9;
+#include <string.h>
 
 static const char *DATE_FORMAT = "%d %b %Y %H:%M:%S";
 
@@ -51,9 +50,7 @@ options\
 
 //{"interface",   'i', "NAME", 	0                  	"Network interface name" }};
 static struct argp_option options[] = {
-    {"daemon",  	'd', 0,      	0,                  "Run in the daemon mode" },
-    {"stat",  		's', 0,      	0,                  "Run in the statistics mode" },
-    {"db",    		111, "PATH", 	0,                 	"Datebase path" },
+    {"db",    		'd', "PATH", 	0,                 	"Datebase path" },
     {"interface", 	'i', "NAME", 	0,                 	"Network interface name" },
 	{0,0,0,0, 		"The following options should be grouped together in daemon mode:" },
     {"period",   	'p', "SECOND", 	OPTION_ARG_OPTIONAL, "The period of writing data " },
@@ -106,6 +103,18 @@ static bool time_conv(const char *str, time_t *t)
 	return (NULL != s) && (-1 != (*t = mktime(&tm)));
 }
 
+static bool mode_parser(const char *str, enum run_mode *mode)
+{
+	if (!strcmp(str, run_mode_str[RM_DAEMON])){
+		*mode = RM_DAEMON;
+		return true;
+	}else if (!strcmp(str, run_mode_str[RM_STAT])){
+		*mode = RM_STAT;
+		return true;
+	}
+	return false;
+}
+
 static error_t parse_opt (int key, char *arg, struct argp_state *state)
 {
 	void report(enum error err)
@@ -117,79 +126,69 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state)
 	struct arguments *args = state->input;
 	switch (key){
 	case 'd':
-		if (args->mode == RM_STAT)
-			fprintf(stderr, "Cannot work in two modes \n");//usage
-		args->mode = RM_DAEMON;
-		log_info("Daemon mode is selected");
-		break;
-	case 's':
-		if (args->mode == RM_DAEMON)
-			fprintf(stderr, "Cannot work in two modes \n");
-		args->mode = RM_STAT;
-		log_info("Statistic mode is selected");
-		break;
-	case 111:
 		args->dbfile = arg;
-		log_info("DataBase file %s", arg);
+		log_dbg("DataBase file %s", arg);
 		break;
 	case 'i':
 		args->netinterface = arg;
-		log_info("Network interface name %s", arg);
+		log_dbg("Network interface name %s", arg);
 		break;
 	case 'p':;
 		long long period;
 		 if (!ld_conv(arg, &period) || ((long long)period < 0))
 			report(AE_CVGERR);//return
 		args->period = period;
-		log_info("Update interval %d[second]", period);
+		log_dbg("Update interval %d[second]", period);
 		break;
 	case 'r':;
 		long long rotate;
 		if (!ld_conv(arg, &rotate) || ((long long)rotate < 0))
 			report(AE_CVGERR);//return;
 		args->rotate = rotate;
-		log_info("Update rotete period %d[minute]", rotate);
+		log_dbg("Update rotete period %d[minute]", rotate);
 		break;
 	case 'l':;
 		long long limMiB;
 		if (!ld_conv(arg, &limMiB) || ((long long)limMiB < 0))
 			report(AE_CVGERR);//return
 		args->limMiB = limMiB;
-		log_info("Limit %d[MiB]", limMiB);
+		log_dbg("Limit %d[MiB]", limMiB);
 		break;
 	case 'c':
 		args->commandstr = arg;
-		log_info("Internal command %s", arg);
+		log_dbg("Internal command %s", arg);
 		break;
 	case 'f':;
 		time_t from;
 		if (!time_conv(arg, &from))
 			report(AE_CVGERR);//return
 		args->from = from;
-		log_info("from date %ld", from);
+		log_dbg("from date %ld", from);
 	case 't':;
 		time_t to;
 		if (!time_conv(arg, &to))
 			report(AE_CVGERR);//return
-		log_info("to date %ld", to);
+		log_dbg("to date %ld", to);
 		args->to = to;
 	case ARGP_KEY_NO_ARGS:
-		log_info("ARGP_KEY_NO_ARGS %ld", ARGP_KEY_NO_ARGS);
+		log_dbg("ARGP_KEY_NO_ARGS %ld", ARGP_KEY_NO_ARGS);
 		argp_usage (state);
 	case ARGP_KEY_ARG:
-		if (state->arg_num >= ARG_COUNT){
-			log_info("ARGP_KEY_ARG %ld", ARGP_KEY_ARG);
-			argp_usage(state); // Too meny arguments
+		log_dbg("state->arg_num %ld", state->arg_num);
+
+		if (state->arg_num > 0 ){
+			report(AE_TMARGS);
+			argp_usage (state);
+			return AE_TMARGS;
 		}
-		break;
-	case ARGP_KEY_END:
-		if (state->arg_num <= 2){
-			log_info("Arg num %ld", state->arg_num );
-			argp_usage(state); // Not enough arguments
-		}
+		enum run_mode mode;
+		if (!mode_parser(arg, &mode))
+			report(AE_MPERR);
+		else
+			args->mode = mode;
+		//log_dbg("Mode arg %s", arg);
 		break;
 	default:
-		log_info("ARGP_ERR_UNKNOWN %ld", ARGP_ERR_UNKNOWN);
 		return ARGP_ERR_UNKNOWN;
 	}
 	return 0;
@@ -204,7 +203,13 @@ static struct argp argp = { options, parse_opt, args_doc, doc};
 int main(int argc, char *argv[])
 {
 	/*default values*/
-	struct arguments arguments = {.period = 10, .rotate = 60, .from = 0, .to = 0};
+	struct arguments arguments = {
+		.dbfile = NULL,
+		.period = 10,
+		.rotate = 60,
+		.from = 0,
+		.to = 0
+	};
 
 	argp_parse (&argp, argc, argv, 0, 0, &arguments);
 
