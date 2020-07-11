@@ -2,6 +2,8 @@
 
 # Project ignores
 /tmp
+/.build
+net-collect
 
 # Prerequisites
 *.d

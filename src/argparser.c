@@ -1,24 +1,31 @@
 #define _XOPEN_SOURCE 700
 
 #include "logging.h"
+#include "argparser.h"
 
 #include <stdio.h>
 #include <time.h>
 #include <argp.h>
 #include <stdbool.h>
+#include <stdlib.h>
 #include <string.h>
+#include <libgen.h>
 
 static const char *DATE_FORMAT = "%d %b %Y %H:%M:%S";
 
+static const char *USAGE = "Try `%s--help' or `%1$s --usage' for more information.\n";
+
 enum error {
-    AE_OK = 0,          /* No error                                        */
-    AE_NOARGS,          /* No arguments provided                           */
-    AE_WRONGARG,        /* Argument has wrong format                       */
-    AE_NENARGS,         /* Not enough arguments                            */
-    AE_TMARGS,          /* Too much arguments                              */
-    AE_CVGERR,          /* Convergence error                               */
-	AE_MPERR,           /* Mode parser error                               */
-    __AE_LAST           /* Last item. So that array sizes match everywhere */
+    AE_OK = 0,      /* No error                                         */
+    AE_NOARGS,      /* No arguments provided                            */
+    AE_WRONGARG,    /* Argument has wrong format                        */
+    AE_NENARGS,     /* Not enough arguments                             */
+    AE_TMARGS,      /* Too much arguments                               */
+    AE_CVGERR,      /* Convergence error                                */
+	AE_MPERR,       /* Mode parser error                                */
+    AE_NODBS,       /* No database specified                            */
+    AE_NPIFS,       /* No interface specified                           */
+    __AE_LAST       /* Last item. So that array sizes match everywhere  */
 };
 //error: too few arguments to function ‘fprintf’
 static const char *const error_msg[] = {
@@ -28,7 +35,9 @@ static const char *const error_msg[] = {
     [AE_NENARGS]  	= "Too few arguments",
     [AE_TMARGS]   	= "Too many arguments",
     [AE_CVGERR]   	= "Convergence unreachable",
-	[AE_MPERR]	  	= "Wrong argument",		//!!!!!!!!!!
+	[AE_MPERR]	  	= "Wrong mode is set",
+    [AE_NODBS]	  	= "No database specified",
+    [AE_NPIFS]	  	= "No interface specified",
     [__AE_LAST]   = NULL
 };
 
@@ -64,36 +73,18 @@ static struct argp_option options[] = {
 };
 
 // mode of run anction
-enum run_mode{
-    RM_DAEMON,
-    RM_STAT
-};
 
 static const char *const run_mode_str[] = {
     [RM_DAEMON]	= "daemon",
     [RM_STAT]   = "stat"
 };
 
-struct arguments{
-      char *dbfile;
-      enum run_mode mode;
-      union _data{
-          struct dargs{
-              long long period;
-              long long rotate;
-              char *netinterface;
-              long long limMiB;
-              char *commandstr;
-          };
-          time_t from;
-          time_t to;
-      };
-};
+
 
 static inline bool ld_conv(const char *str, long long *dstptr)
 {
     char etc;
-    return (sscanf(str, "%d%c", dstptr, &etc) == 1) && (0 < *dstptr);
+    return (sscanf(str, "%lld%c", dstptr, &etc) == 1) && (0 < *dstptr);
 }
 
 static bool time_conv(const char *str, time_t *t)
@@ -115,14 +106,14 @@ static bool mode_parser(const char *str, enum run_mode *mode)
 	return false;
 }
 
+void err_report(enum error err, struct argp_state *state)
+{
+    fprintf(stderr, "Error: %s.\n", error_msg[err]);
+    argp_usage (state);
+}
+
 static error_t parse_opt (int key, char *arg, struct argp_state *state)
 {
-	void report(enum error err)
-    {
-        fprintf(stderr, "Error: %s.\n", error_msg[err]);
-        // exit(error_retcodes[err]);
-    }
-
 	struct arguments *args = state->input;
 	switch (key){
 	case 'd':
@@ -136,23 +127,25 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state)
 	case 'p':;
 		long long period;
 		 if (!ld_conv(arg, &period) || ((long long)period < 0))
-			report(AE_CVGERR);//return
+			err_report(AE_CVGERR, state);//return
 		args->period = period;
 		log_dbg("Update interval %d[second]", period);
 		break;
 	case 'r':;
 		long long rotate;
-		if (!ld_conv(arg, &rotate) || ((long long)rotate < 0))
-			report(AE_CVGERR);//return;
+		if (!ld_conv(arg, &rotate) || ((long long)rotate < 0)){
+			err_report(AE_CVGERR, state);
+        }
 		args->rotate = rotate;
 		log_dbg("Update rotete period %d[minute]", rotate);
 		break;
 	case 'l':;
 		long long limMiB;
 		if (!ld_conv(arg, &limMiB) || ((long long)limMiB < 0))
-			report(AE_CVGERR);//return
+			err_report(AE_CVGERR, state);//return
 		args->limMiB = limMiB;
 		log_dbg("Limit %d[MiB]", limMiB);
+        argp_usage (state);
 		break;
 	case 'c':
 		args->commandstr = arg;
@@ -161,32 +154,26 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state)
 	case 'f':;
 		time_t from;
 		if (!time_conv(arg, &from))
-			report(AE_CVGERR);//return
+			err_report(AE_CVGERR, state);//return
 		args->from = from;
 		log_dbg("from date %ld", from);
 	case 't':;
 		time_t to;
 		if (!time_conv(arg, &to))
-			report(AE_CVGERR);//return
+			err_report(AE_CVGERR, state);//return
 		log_dbg("to date %ld", to);
 		args->to = to;
 	case ARGP_KEY_NO_ARGS:
-		log_dbg("ARGP_KEY_NO_ARGS %ld", ARGP_KEY_NO_ARGS);
-		argp_usage (state);
+		err_report(AE_NOARGS, state);//return
 	case ARGP_KEY_ARG:
-		log_dbg("state->arg_num %ld", state->arg_num);
+		if (state->arg_num > 0 )
+			err_report(AE_TMARGS, state);
 
-		if (state->arg_num > 0 ){
-			report(AE_TMARGS);
-			argp_usage (state);
-			return AE_TMARGS;
-		}
 		enum run_mode mode;
 		if (!mode_parser(arg, &mode))
-			report(AE_MPERR);
-		else
-			args->mode = mode;
-		//log_dbg("Mode arg %s", arg);
+			err_report(AE_MPERR, state);
+		args->mode = mode;
+        log_dbg("Mode arg %s", arg);
 		break;
 	default:
 		return ARGP_ERR_UNKNOWN;
@@ -198,20 +185,28 @@ static char args_doc[] = "MODE [daemon] \nMODE [stat]";
 
 static struct argp argp = { options, parse_opt, args_doc, doc};
 
-
-
-int main(int argc, char *argv[])
+bool args_parce(int argc, char *argv[], struct arguments *args)
 {
-	/*default values*/
-	struct arguments arguments = {
-		.dbfile = NULL,
-		.period = 10,
-		.rotate = 60,
-		.from = 0,
-		.to = 0
-	};
+	/*Set default values*/
+    args->dbfile = NULL;
+    args->period = 10;
+    args->rotate = 60;
+    args->netinterface = NULL;
+    args->from = 0;
+    args->to = 0;
 
-	argp_parse (&argp, argc, argv, 0, 0, &arguments);
+	bool ret = argp_parse (&argp, argc, argv, 0, 0, args) == 0;
 
-	return 0;
+    char *progname = basename(argv[0]);
+    if (NULL == args->dbfile){
+        fprintf(stderr, "Error: %s. \n", error_msg[AE_NODBS]);
+        fprintf(stderr, USAGE, progname);
+        exit(AE_NODBS);
+    }
+    if (NULL == args->netinterface){
+        fprintf(stderr, "Error: %s.\n", error_msg[AE_NPIFS]);
+        fprintf(stderr, USAGE, progname);
+        exit(AE_NPIFS);
+    }
+	return ret;
 }
