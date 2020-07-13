@@ -35,7 +35,7 @@ static const char *const error_msg[] = {
     [AE_NENARGS]  	= "Too few arguments",
     [AE_TMARGS]   	= "Too many arguments",
     [AE_CVGERR]   	= "Convergence unreachable",
-	[AE_MPERR]	  	= "Wrong mode is set",
+	[AE_MPERR]	  	= "Wrong mode",
     [AE_NODBS]	  	= "No database specified",
     [AE_NPIFS]	  	= "No interface specified",
     [__AE_LAST]   = NULL
@@ -208,5 +208,8 @@ bool args_parce(int argc, char *argv[], struct arguments *args)
         fprintf(stderr, USAGE, progname);
         exit(AE_NPIFS);
     }
+
+  // log_info(fmt, ...)
+
 	return ret;
 }

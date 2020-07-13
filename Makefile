@@ -1,9 +1,11 @@
-DEBUG ?= 0
+#only in DEBAG mode!!!!!!!!
+DEBUG ?= 5
 TARGET ?= net-collect
 INCDIRS = ./inc
 SRCDIR = ./src
 SRCS := $(TARGET).c
 SRCS += argparser.c
+SRCS += netdaemon.c
 BUILDDIR = ./.build
 
 
