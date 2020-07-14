@@ -11,7 +11,7 @@
 #include <string.h>
 #include <libgen.h>
 
-static const char *DATE_FORMAT = "%d %b %Y %H:%M:%S";
+static const char *DATE_FORMAT = "%Y %m %d %H:%M:%S";
 
 static const char *USAGE = "Try `%s--help' or `%1$s --usage' for more information.\n";
 
@@ -67,8 +67,8 @@ static struct argp_option options[] = {
     {"limit",   	'l', "MiB", 	OPTION_ARG_OPTIONAL, "Data limit" },
     {"cmd",   		'c', "STRING", 	OPTION_ARG_OPTIONAL, "Internal command" },
 	{0,0,0,0,		"The following options should be grouped together in statistics mode:" },
-    {"from",   		'f', "DATE",	OPTION_ARG_OPTIONAL, "From which date" },
-    {"to",   		't', "DATE", 	OPTION_ARG_OPTIONAL, "Until which date" },
+    {"from",   		'f', "DATE",	OPTION_ARG_OPTIONAL, "From which date. Format[YYYY MM DD HH:MM:SS]" },
+    {"to",   		't', "DATE", 	OPTION_ARG_OPTIONAL, "Until which date. Format[YYYY MM DD HH:MM:SS]" },
     { 0 }
 };
 
@@ -79,8 +79,6 @@ static const char *const run_mode_str[] = {
     [RM_STAT]   = "stat"
 };
 
-
-
 static inline bool ld_conv(const char *str, long long *dstptr)
 {
     char etc;
@@ -89,9 +87,11 @@ static inline bool ld_conv(const char *str, long long *dstptr)
 
 static bool time_conv(const char *str, time_t *t)
 {
-	struct tm tm = {0};
+    struct tm tm;
 	char *s = strptime(str, DATE_FORMAT, &tm);
-	return (NULL != s) && (-1 != (*t = mktime(&tm)));
+    if (NULL == s)
+        return false;
+	return (-1 != (*t = mktime(&tm)));
 }
 
 static bool mode_parser(const char *str, enum run_mode *mode)
@@ -157,12 +157,14 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state)
 			err_report(AE_CVGERR, state);//return
 		args->from = from;
 		log_dbg("from date %ld", from);
+        break;
 	case 't':;
 		time_t to;
 		if (!time_conv(arg, &to))
 			err_report(AE_CVGERR, state);//return
 		log_dbg("to date %ld", to);
 		args->to = to;
+        break;
 	case ARGP_KEY_NO_ARGS:
 		err_report(AE_NOARGS, state);//return
 	case ARGP_KEY_ARG:
@@ -194,6 +196,15 @@ bool args_parce(int argc, char *argv[], struct arguments *args)
     args->netinterface = NULL;
     args->from = 0;
     args->to = 0;
+    log_dbg("In db: %s",  args->dbfile);
+    log_dbg("In mode: %d",args->mode);
+    log_dbg("In period: %lld",args->period);
+    log_dbg("In rotate: %lld",args->rotate);
+    log_dbg("In ninterf: %s",args->netinterface);
+    log_dbg("In limDB: %lld",args->limMiB);
+    log_dbg("In cmd: %s", args->commandstr);
+    log_dbg("In from: %ld", args->from);
+    log_dbg("In to: %ld", args->to);
 
 	bool ret = argp_parse (&argp, argc, argv, 0, 0, args) == 0;
 
@@ -203,11 +214,21 @@ bool args_parce(int argc, char *argv[], struct arguments *args)
         fprintf(stderr, USAGE, progname);
         exit(AE_NODBS);
     }
-    if (NULL == args->netinterface){
+    if ((NULL == args->netinterface) && (RM_STAT != args->mode)){
         fprintf(stderr, "Error: %s.\n", error_msg[AE_NPIFS]);
         fprintf(stderr, USAGE, progname);
         exit(AE_NPIFS);
     }
+    log_dbg("==================");
+     log_dbg("Out db: %s",  args->dbfile);
+     log_dbg("Out mode: %d",args->mode);
+     log_dbg("Out period: %lld",args->period);
+    log_dbg("Out rotate: %lld",args->rotate);
+    log_dbg("Out ninterf: %s",args->netinterface);
+    log_dbg("Out limDB: %lld",args->limMiB);
+    log_dbg("Out cmd: %s", args->commandstr);
+    log_dbg("Out from: %ld", args->from);
+    log_dbg("Out to: %ld", args->to);
 
   // log_info(fmt, ...)
 

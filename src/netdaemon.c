@@ -197,7 +197,7 @@ bool daemod_run(struct arguments *args)
         if (!write_to_db(db, args->dbfile, netdata.now, netdata.RX, netdata.TX, &msg)){
             fprintf(fp, "Error: %s\n", msg);
             sqlite3_close(db);
-            Exit(1);
+            exit(1);
         }else{
             fprintf(fp, "Write to db is success.\n");
         }

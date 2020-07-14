@@ -1,4 +1,5 @@
 #include "collectdb.h"
+#include "logging.h"
 
 #include <sqlite3.h>
 #include <stdio.h>
@@ -7,22 +8,18 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-
 #define DB_TABLE "netcollect"
 #define ID_FLD "id"
 #define TIME_FLD "time"
 #define RX_FLD "rx"
 #define TX_FLD "tx"
-//%s
-static const char *const SQL_QUERY_CREATE_TABLE = (
-	"CREATE TABLE " DB_TABLE " ("
-	ID_FLD " INT PRIMARY KEY NOT NULL,"
-	TIME_FLD " INTEGER,"
-	RX_FLD " INTEGER ,"
-	RX_FLD " INTEGER );"
-);
 
-static const char *const SQL_QUERY_SELECT_FROM = (
+#define N_BUFF 20
+
+static const char *DATE_FORMAT = "%Y %m %d %H:%M:%S";
+//%s
+
+static const char *const SQL_QUERY_SELECT = (
 	"SELECT * FROM " DB_TABLE " ORDER BY " TIME_FLD ";"
 );
 
@@ -31,29 +28,78 @@ static const char *const SQL_QUERY_INSERT_INTO = (
     "VALUES (%ld, %lld, %lld);"
 );
 
-void dbclose(sqlite3 *db)
-{
-	int rc = sqlite3_close(db);
-	if (rc != SQLITE_OK ){
-		exit(1);
-	}
-}
+static const char *const SQL_QUERY_SELECT_FROM = (
+	"SELECT * FROM " DB_TABLE " WHERE " TIME_FLD " >= %ld;"
+);
 
-bool dbconnect(sqlite3 *db, char *dbpath, char **err_msg)
+static const char *const SQL_QUERY_SELECT_TO = (
+	"SELECT * FROM " DB_TABLE " WHERE " TIME_FLD " <= %ld;"
+);
+
+static const char *const SQL_QUERY_SELECT_FROM_TO = (
+	"SELECT * FROM " DB_TABLE " WHERE " TIME_FLD " >= %ld AND "
+	TIME_FLD "<= %ld;"
+);
+
+
+bool print_db_table(char *db_name, time_t from, time_t to)
 {
-	int rc = sqlite3_open(dbpath, &db);
+	sqlite3 *db;
+	char *err_msg = 0;
+	char *sql;
+	int rc = sqlite3_open(db_name, &db);
 	if (rc != SQLITE_OK) {
-		*err_msg = strdup(sqlite3_errmsg(db));
-        sqlite3_close(db);
-        return false;
-    }
+		log_err("Cannot open database: %s\n", sqlite3_errmsg(db));
+		sqlite3_close(db);
+		return false;
+	}
+	log_dbg("From: %ld", from);
+	log_dbg("To: %ld", to);
+	if ((0 != from) && (0 != to)){
+		sql = sqlite3_mprintf(SQL_QUERY_SELECT_FROM_TO, from, to);
+	}else if ((0 != from) && (0 == to)){
+		sql = sqlite3_mprintf(SQL_QUERY_SELECT_FROM, from);
+	}else if ((0 == from) && (0 != to)){
+		log_dbg("Only to selected: %ld", to);
+		sql = sqlite3_mprintf(SQL_QUERY_SELECT_TO, to);
+	}else{
+		sql = strdup(SQL_QUERY_SELECT);
+	}
+	log_dbg("Query: %s", sql);
+
+	printf("\n");
+	sqlite3_stmt *res;
+
+	rc = sqlite3_prepare_v2(db, sql , -1,
+		&res, 0);
+	if (rc != SQLITE_OK ) {
+		log_err("Failed to select data.");
+        log_err("SQL error: %s", err_msg);
+		sqlite3_free(err_msg);
+		sqlite3_close(db);
+		return false;
+	}
+
+	printf("|%20s | %16s | %16s|\n", "time", "rx", "tx");
+	for (int i = 0; i<60; i++)
+		printf("-");
+	printf("\n");
+
+	char timebuff[N_BUFF];
+	while(sqlite3_step(res) == SQLITE_ROW)
+	{
+	time_t t = (time_t)sqlite3_column_int(res, 1);
+	strftime(timebuff, N_BUFF, DATE_FORMAT, localtime(&t));
+
+
+	printf("|%20s | %16lld | %16lld|\n",
+		   timebuff,
+		   sqlite3_column_text(res, 2),
+		   sqlite3_column_text(res, 3));
+	}
+	sqlite3_close(db);
+
 	return true;
-}
-
-
-bool print_table(char *db_name, int from, int to)
-{
-
 }
 
 bool write_to_db(sqlite3 *db, char *db_name, time_t _time, long long rx, long long tx, char **msg)
