@@ -1,4 +1,4 @@
-net-collect — Program for collecting statistic of internet trafic 
+net-collect — CLI program for collecting statistic of internet trafic 
 -----------------------------------------------------------------------
 
 
