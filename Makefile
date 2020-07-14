@@ -6,6 +6,7 @@ SRCDIR = ./src
 SRCS := $(TARGET).c
 SRCS += argparser.c
 SRCS += netdaemon.c
+SRCS += collectdb.c
 BUILDDIR = ./.build
 
 
@@ -13,7 +14,7 @@ CC = gcc
 CFLAGS := -O2 -std=gnu18 -fms-extensions 
 #CFLAGS += -Wall -Wextra -Wpedantic
 CFLAGS += -DDEBUG=$(DEBUG)
-LDFLAGS := -pthread
+LDFLAGS := -lsqlite3
 
 .PHONY: all clean tidy
 

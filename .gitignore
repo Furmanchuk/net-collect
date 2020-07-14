@@ -4,6 +4,8 @@
 /tmp
 /.build
 net-collect
+*.db
+*.log
 
 # Prerequisites
 *.d

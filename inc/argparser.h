@@ -5,6 +5,7 @@ enum run_mode{
     RM_DAEMON,
     RM_STAT
 };
+//!!!!!!!!!!!!
 #pragma once
 struct arguments{
       char *dbfile;

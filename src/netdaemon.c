@@ -1,7 +1,9 @@
 #include "logging.h"
 #include "argparser.h"
 #include "netdaemon.h"
+#include "collectdb.h"
 
+#include <sqlite3.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
@@ -23,8 +25,13 @@ enum error {
     ND_MAERR,       /* Error memory allocate                            */
     ND_CNERR,       /* Command not found                                */
     ND_PCERR,       /*Parse out error                                   */
-    ND_OPERR,       /*Error opening pipe                                   */
+    ND_OPERR,       /*Error opening pipe                                 */
     __ND_LAST       /* Last item. So that array sizes match everywhere  */
+};
+struct netdata{
+    long long TX;
+    long long RX;
+    time_t now;
 };
 
 char ** read_prog_out(char *cmd)
@@ -38,7 +45,7 @@ char ** read_prog_out(char *cmd)
         printf("Error opening pipe!\n");
         return NULL;
     }
-    char **strs = (char **) malloc(sizeof(char *) * 1);
+    char **strs = (char **) malloc(sizeof(char *));
     if (strs == NULL) {
         perror("malloc failed");
         exit(1);
@@ -76,7 +83,6 @@ bool parce_cmd_out(char **outcmd, struct netdata *data)
             // (NULL != outcmd[cnt])
             strtoken = strtok(outcmd[cnt], delim);
             data->RX = atoi(strtoken);
-            log_dbg("RX: %lld", data->RX);
             continue;
         }
         if (!strcmp(strtoken, TXstr)){
@@ -84,8 +90,6 @@ bool parce_cmd_out(char **outcmd, struct netdata *data)
             // (NULL != outcmd[cnt])
             strtoken = strtok(outcmd[cnt], delim);
             data->TX = atoi(strtoken);
-            log_dbg("TX: %lld", data->TX);
-            // printf("TX: %lld\n", data->TX);
             continue;
         }
         cnt++;
@@ -119,43 +123,46 @@ bool init_daemon(void)
     close(STDIN_FILENO);
     close(STDOUT_FILENO);
     close(STDERR_FILENO);
-    // Open a log file in write mode.
+
 
     return true;
 }
 
 bool collect_stat(char *command, struct netdata *data)
 {
-    // void free_mem(char **arr)
-    // {
-    //     int cnt = 0;
-    //     while(NULL == arr[cnt]){
-    //         free(arr[cnt]);
-    //     }
-    //     free(arr);
-    // }
-
+    bool ret = false;
+    int cnt = 0;
     char **outstr = read_prog_out(command);
 
     if (outstr == NULL){
-        fprintf(stderr, "%s\n", "Alloc error"); // print to log
+        // fprintf(fp, "Alloc error\n"); // print to log
         return false;
     }
 
     if (!parce_cmd_out(outstr, data)){
-        fprintf(stderr, "%s\n", "Parce error"); // print to log
-        // free_mem(outstr);
+        // fprintf(fp, "Parce error\n"); // print to log
         return false;
+        goto free_mem;
     }
+    ret = true;
 
-    // free_mem(outstr);
-    return true;
+free_mem:
+
+    while(NULL == outstr[cnt]){
+        free(outstr[cnt]);
+        cnt++;
+    }
+    free(outstr);
+    return ret;
 }
 
 // int main(void)
 bool daemod_run(struct arguments *args)
 {
-
+    if (access(args->dbfile, F_OK) == -1){
+        fprintf(stderr, "File: %s does not exist!\n", args->dbfile);
+        exit(1);
+    }
     // char *iname = "wlp3s0";
     int cmdlen = strlen(CMDIPLINK) + strlen(args->netinterface) + 1;
     char *cmd = (char*) calloc(cmdlen, sizeof(cmd));
@@ -170,6 +177,10 @@ bool daemod_run(struct arguments *args)
     log_info("N tick %lld.", ntick);
     long long cnt = 0;
 
+    char *msg;
+    sqlite3 *db;
+
+    log_info("Connection to %s is success.", args->dbfile);
     init_daemon();
     FILE *fp = NULL;
     fp = fopen ("daemonlog.log", "w+");
@@ -180,23 +191,25 @@ bool daemod_run(struct arguments *args)
             fprintf(fp, "Failture collect_stat \n");
             exit(1);
         }
+        fprintf(fp, "%d: Time: %d \t RX: %lld \t  TX: %lld \n",
+            cnt, netdata.now, netdata.RX, netdata.TX);
 
-        char *str = ctime(&netdata.now);
-        str[strlen(str)-1] = '\0';
-        fprintf(fp, "%d: Time: %s \t RX: %lld \t  TX: %lld \n", cnt, str, netdata.RX, netdata.TX);
-
-
-        // fprintf(fp, "Log ...\n");
-        //Dont block context switches, let the process sleep for some time
-        sleep(1);
-        fflush(fp);
-        // Implement and call some function that does core work for this daemon.
+        if (!write_to_db(db, args->dbfile, netdata.now, netdata.RX, netdata.TX, &msg)){
+            fprintf(fp, "Error: %s\n", msg);
+            sqlite3_close(db);
+            Exit(1);
+        }else{
+            fprintf(fp, "Write to db is success.\n");
+        }
+        sleep(5);
         if (cnt >= ntick)
             break;
+        fflush(fp);
 
     }
+    sqlite3_close(db);
+    fprintf(fp, "DB connection is closed.\n");
     fprintf(fp, "Daemon terminated.");
     fclose(fp);
     return true;
-    // return 0;
 }
