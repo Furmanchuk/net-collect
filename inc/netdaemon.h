@@ -1,4 +1,4 @@
 #include "argparser.h"
 #include <stdbool.h>
 
-bool daemod_run(struct arguments *args);
+bool daemod_run(arguments *args);
