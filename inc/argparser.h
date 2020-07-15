@@ -2,27 +2,30 @@
 #include <time.h>
 
 /**
- * enumeration run_mode - Run mode enumeration.
+ *Run mode enumeration.
  */
-enum run_mode { RM_DAEMON, RM_STAT };
+enum run_mode {
+    /** Daemon mode running */
+    RM_DAEMON,
+    /** Statistics mode running */
+    RM_STAT };
 
 // DoTo: redeclaration
 #pragma once
 
 /**
- * struct _arguments - contain main parameters after parse.
- * @dbfile: Description of member1.
- * @run_mode:
+ * Collected main parameters after parse.
+ * @dbfile: database file path.
+ * @run_mode: :c:type:`run_mode`
  * @period: update period
  * @rotate: duration of work
  * @netinterface: interface name
  * @limMiB: traffic threshold
  * @commandstr: internal command
  * @from: show data from time
- * @ещ: show data to time
+ * @to: show data to time
  */
-
-struct _arguments{
+struct _arguments {
   char *dbfile;
   enum run_mode mode;
   struct dargs {
@@ -35,24 +38,18 @@ struct _arguments{
   time_t from;
   time_t to;
 };
-
-/**
- * typedef arguments - stract argument of argp.
- */
+/** Opaque object implemented with :c:type:`_arguments` */
 typedef struct _arguments arguments;
 
 /**
- * args_parce() - parcer input of command line.
- * @argc: number of in optins.
- * @arg2: options of command line.
+ * args_parce() - parcer input of command line
+ * @argc: number of in optins
+ * @argv: options of command line
+ * @args: :c:type:`arguments`
+ * @return: true -- if parse was successful or false -- otherwise
  *
- the function selects command line arguments and populates structure 2 according
-  to the entered parameters
- * Function parced the command line arguments and fill structure arguments
+ * Function parced the command line arguments and fill :c:type:`_arguments`
  * according to the entered options and their parameters.
  *
- * Return:
- * -true if parse was successful
- * -false otherwise
  */
 bool args_parce(int argc, char *argv[], arguments *args);

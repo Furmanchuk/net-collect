@@ -39,6 +39,10 @@ extensions = [
 # Path to the root of the source files.
 cautodoc_root = str(projdir)
 
+# Hawkmoth autodoc style
+# One of none (default), javadoc-basic, javadoc-liberal, and kernel-doc
+cautodoc_compat = 'kernel-doc'
+
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
 
