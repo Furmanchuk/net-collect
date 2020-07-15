@@ -16,6 +16,8 @@
 
 #define N_BUFF 20
 
+static long double MiB = 9.53674E-7;
+
 static const char *DATE_FORMAT = "%Y %m %d %H:%M:%S";
 //%s
 
@@ -67,11 +69,16 @@ bool print_db_table(char *db_name, time_t from, time_t to)
 	}
 	log_dbg("Query: %s", sql);
 
-	printf("\n");
+
 	sqlite3_stmt *res;
 
-	rc = sqlite3_prepare_v2(db, sql , -1,
-		&res, 0);
+	printf("|%20s |  %16s| %16s|\n",
+		"time", "rx(byte)", "tx(byte)");
+	for (int i = 0; i<60; i++)
+		printf("-");
+	printf("\n");
+
+	rc = sqlite3_prepare_v2(db, sql , -1, &res, 0);
 	if (rc != SQLITE_OK ) {
 		log_err("Failed to select data.");
         log_err("SQL error: %s", err_msg);
@@ -79,28 +86,62 @@ bool print_db_table(char *db_name, time_t from, time_t to)
 		sqlite3_close(db);
 		return false;
 	}
-
-	printf("|%20s | %16s | %16s|\n", "time", "rx", "tx");
-	for (int i = 0; i<60; i++)
-		printf("-");
-	printf("\n");
-
+	long long rx, tx;
 	char timebuff[N_BUFF];
 	while(sqlite3_step(res) == SQLITE_ROW)
 	{
 	time_t t = (time_t)sqlite3_column_int(res, 1);
 	strftime(timebuff, N_BUFF, DATE_FORMAT, localtime(&t));
-
+	rx = sqlite3_column_int(res, 2);
+	tx = sqlite3_column_int(res, 3);
 
 	printf("|%20s | %16lld | %16lld|\n",
-		   timebuff,
-		   sqlite3_column_text(res, 2),
-		   sqlite3_column_text(res, 3));
+		timebuff, rx, tx);
 	}
 	sqlite3_close(db);
 
 	return true;
 }
+
+/*bool print_db_table(char *db_name, time_t from, time_t to)
+{
+	sqlite3 *db;
+    char *err_msg = 0;
+
+    int rc = sqlite3_open("netstat.db", &db);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Cannot open database: %s\n", sqlite3_errmsg(db));
+        sqlite3_close(db);
+        return false;
+    }
+
+	printf("|%10s | %16s | %16s|\n", "time", "rx", "tx");
+	int i;
+	for (i = 0; i<43; i++)
+		printf("%s", "-");
+	printf("\n");
+	sqlite3_stmt *res;
+	rc = sqlite3_prepare_v2(db, "SELECT * FROM netcollect ORDER BY time;" , -1,
+		&res, 0);
+
+    if (rc != SQLITE_OK ) {
+        fprintf(stderr, "Failed to select data\n");
+        fprintf(stderr, "SQL error: %s\n", err_msg);
+        sqlite3_free(err_msg);
+        sqlite3_close(db);
+        return false;
+    }
+	while(sqlite3_step(res) == SQLITE_ROW)
+	{
+	printf("|%3ld | %16lld | %16lld|\n",
+	       sqlite3_column_int(res, 1),
+	       sqlite3_column_text(res, 2),
+		   sqlite3_column_text(res, 3));
+	}
+	sqlite3_close(db);
+
+    return false;
+}*/
 
 bool write_to_db(sqlite3 *db, char *db_name, time_t _time, long long rx, long long tx, char **msg)
 {

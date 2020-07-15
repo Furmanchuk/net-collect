@@ -51,19 +51,20 @@ static const char *const error_msg[] = {
 
 /* Program documentation. */
 static char doc[] =
-  "firs\
-options\
-\vThis part of the documentation comes *after* the options;\
- note that the text is automatically filled, but it's possible\
- to force a line-break, e.g.";
+  "CLI programm to collect net statistsic\
+\vUsega example: \n\
+for statistsic mode: ./net-collect stat --db=./some.db\n\
+for daemon mode: ./net-collect daemon --db=./some.db --interface=wlp3s0\n\
+\n\
+Report bugs to <furmanchuk.v.y@gmail.com>";
 
 //{"interface",   'i', "NAME", 	0                  	"Network interface name" }};
 static struct argp_option options[] = {
     {"db",    		'd', "PATH", 	0,                 	"Datebase path" },
-    {"interface", 	'i', "NAME", 	0,                 	"Network interface name" },
 	{0,0,0,0, 		"The following options should be grouped together in daemon mode:" },
+    {"interface", 	'i', "NAME", 	0,                 	"Network interface name" },
     {"period",   	'p', "SECOND", 	OPTION_ARG_OPTIONAL, "The period of writing data " },
-    {"rotete",   	'r', "MINUTE", 	OPTION_ARG_OPTIONAL, "Running time" },
+    {"rotate",   	'r', "MINUTE", 	OPTION_ARG_OPTIONAL, "Running time" },
     {"limit",   	'l', "MiB", 	OPTION_ARG_OPTIONAL, "Data limit" },
     {"cmd",   		'c', "STRING", 	OPTION_ARG_OPTIONAL, "Internal command" },
 	{0,0,0,0,		"The following options should be grouped together in statistics mode:" },
@@ -82,6 +83,7 @@ static const char *const run_mode_str[] = {
 static inline bool ld_conv(const char *str, long long *dstptr)
 {
     char etc;
+    log_dbg("in conv");
     return (sscanf(str, "%lld%c", dstptr, &etc) == 1) && (0 < *dstptr);
 }
 
@@ -137,15 +139,14 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state)
 			err_report(AE_CVGERR, state);
         }
 		args->rotate = rotate;
-		log_dbg("Update rotete period %d[minute]", rotate);
+		log_dbg("Update rotete period %d [minute]", rotate);
 		break;
 	case 'l':;
 		long long limMiB;
 		if (!ld_conv(arg, &limMiB) || ((long long)limMiB < 0))
 			err_report(AE_CVGERR, state);//return
 		args->limMiB = limMiB;
-		log_dbg("Limit %d[MiB]", limMiB);
-        argp_usage (state);
+		log_dbg("Limit %lld [MiB]", limMiB);
 		break;
 	case 'c':
 		args->commandstr = arg;
@@ -191,8 +192,8 @@ bool args_parce(int argc, char *argv[], struct arguments *args)
 {
 	/*Set default values*/
     args->dbfile = NULL;
-    args->period = 10;
-    args->rotate = 60;
+    args->period = 5;
+    args->rotate = 1;
     args->netinterface = NULL;
     args->from = 0;
     args->to = 0;
@@ -215,14 +216,15 @@ bool args_parce(int argc, char *argv[], struct arguments *args)
         exit(AE_NODBS);
     }
     if ((NULL == args->netinterface) && (RM_STAT != args->mode)){
+        log_err("Error: %s", error_msg[AE_NPIFS]);
         fprintf(stderr, "Error: %s.\n", error_msg[AE_NPIFS]);
         fprintf(stderr, USAGE, progname);
         exit(AE_NPIFS);
     }
     log_dbg("==================");
-     log_dbg("Out db: %s",  args->dbfile);
-     log_dbg("Out mode: %d",args->mode);
-     log_dbg("Out period: %lld",args->period);
+    log_dbg("Out db: %s",  args->dbfile);
+    log_dbg("Out mode: %d",args->mode);
+    log_dbg("Out period: %lld",args->period);
     log_dbg("Out rotate: %lld",args->rotate);
     log_dbg("Out ninterf: %s",args->netinterface);
     log_dbg("Out limDB: %lld",args->limMiB);

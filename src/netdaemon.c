@@ -12,9 +12,12 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <time.h>
+#include <unistd.h>
 
 #define BUFSIZE 128
 #define DAEMON_NAME "net-collect"
+
+static long double MiB = 9.53674E-7;
 
 static const char *RXstr = "RX:";
 static const char *TXstr = "TX:";
@@ -156,6 +159,15 @@ free_mem:
     return ret;
 }
 
+void do_internal_cmd(char *cmd)
+{
+    if (fork()==0){
+        //printf("I'm the child process.\n");
+        system(cmd);
+        exit(0);
+    }
+}
+
 // int main(void)
 bool daemod_run(struct arguments *args)
 {
@@ -169,18 +181,22 @@ bool daemod_run(struct arguments *args)
     strcpy(cmd, CMDIPLINK);
     strcat(cmd, args->netinterface);
 
-    // printf("cmd>> %s\n", cmd);
-
     struct netdata netdata={-1, -1, time(NULL)};
     log_info("Command %s.", cmd);
-    long long ntick = 10;
+    /* Convert rotate to minute*/
+    long long ntick = (args->rotate * 60)/args->period;
     log_info("N tick %lld.", ntick);
     long long cnt = 0;
 
     char *msg;
     sqlite3 *db;
 
-    log_info("Connection to %s is success.", args->dbfile);
+    struct netdata buffdata[2];
+    buffdata[0] = netdata;
+    long long sumMiB = 0;
+    bool limflag = false;
+
+    log_info("cmd>> %s", cmd);
     init_daemon();
     FILE *fp = NULL;
     fp = fopen ("daemonlog.log", "w+");
@@ -191,8 +207,27 @@ bool daemod_run(struct arguments *args)
             fprintf(fp, "Failture collect_stat \n");
             exit(1);
         }
+        buffdata[1] = buffdata[0];
+        buffdata[0] = netdata;
+
+        if (1 == cnt){
+            netdata.RX = 0;
+            netdata.TX =0;
+        }else{
+            netdata.RX = buffdata[0].RX - buffdata[1].RX;
+            netdata.TX = buffdata[0].TX - buffdata[1].TX;
+            sumMiB += (netdata.RX + netdata.TX);// * MiB;
+            fprintf(fp, "sumMiB: %lld \n", sumMiB);
+        }
+
+        if (!limflag && (sumMiB*MiB >= args->limMiB) && (NULL != args->commandstr)){
+            do_internal_cmd(args->commandstr);
+            limflag = !limflag;
+        }
+
         fprintf(fp, "%d: Time: %d \t RX: %lld \t  TX: %lld \n",
             cnt, netdata.now, netdata.RX, netdata.TX);
+
 
         if (!write_to_db(db, args->dbfile, netdata.now, netdata.RX, netdata.TX, &msg)){
             fprintf(fp, "Error: %s\n", msg);
@@ -201,7 +236,7 @@ bool daemod_run(struct arguments *args)
         }else{
             fprintf(fp, "Write to db is success.\n");
         }
-        sleep(5);
+        sleep(args->period);
         if (cnt >= ntick)
             break;
         fflush(fp);
