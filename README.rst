@@ -1,4 +1,4 @@
-net-collect
+net-collect [under development]
 -----------------------------------------------------------------------
 
 CLI program for collecting statistic of internet traffic. It is possible to collect statistics for a certain period of time and displaying it in to the terminal. It is also possible to call a internal command to notify you that the limit has been exceeded.
