@@ -48,11 +48,7 @@ enum run_mode {
  * Collected main parameters after parse.
  * @dbfile: database file path.
  * @run_mode: :c:type:`run_mode`
- * @period: update period
- * @rotate: duration of work
- * @netinterface: interface name
- * @limMiB: traffic threshold
- * @commandstr: internal command
+ * @dargs: :c:type:`dargs`
  * @from: show data from time
  * @to: show data to time
  */
@@ -276,6 +272,5 @@ int main(int argc, char *argv[])
         print_db_table(arguments.dbfile, arguments.from, arguments.to);
         break;
     }
-
     return 0;
 }

@@ -7,7 +7,7 @@
  * @db_name: database path
  * @from: from date
  * @to: to date
- * @return: true -- if parse was successful or false -- otherwise
+ * @return: true -- if printing was successful or false -- otherwise
  */
 bool print_db_table(char *db_name, time_t from, time_t to);
 
@@ -18,7 +18,7 @@ bool print_db_table(char *db_name, time_t from, time_t to);
  * @rx: receive bytes
  * @tx: transmit bytes
  * @err_msg: SQLite error message
- * @return: true -- if parse was successful or false -- otherwise
+ * @return: true -- if writing was successful or false -- otherwise
  */
 bool write_to_db(sqlite3 *db, char *db_name, time_t _time, long long rx,
                  long long tx, char **err_msg);
