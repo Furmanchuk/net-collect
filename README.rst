@@ -39,6 +39,8 @@ Using example
     # or print for the specified time
     ./net-collect stat --db=dbpath.db --from="2020 07 14 18:30:00" --to="2020 07 14 20:40:00"
 
+You can use a test database: https://github.com/Furmanchuk/net-collect/tree/dev/testdb
+
 LICENCE
 -----------------------------------------------------------------------
 The MIT License (MIT)  Copyright © 2020 Vadym Furmanchuk
