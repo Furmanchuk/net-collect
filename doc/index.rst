@@ -10,8 +10,6 @@ Net-collect Documentation!
    :maxdepth: 2
    :caption: Contents:
 
-   argparcer
-
    collectdb
 
    netdaemon
