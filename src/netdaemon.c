@@ -1,5 +1,5 @@
 #include "netdaemon.h"
-#include "argparser.h"
+
 #include "collectdb.h"
 #include "logging.h"
 
@@ -151,20 +151,21 @@ void do_internal_cmd(char *cmd) {
   }
 }
 
-bool daemod_run(arguments *args) {
-  if (access(args->dbfile, F_OK) == -1) {
-    fprintf(stderr, "File: %s does not exist!\n", args->dbfile);
+bool daemod_run(char *dbpath, struct dargs *dargs)
+{
+  if (access(dbpath, F_OK) == -1) {
+    fprintf(stderr, "File: %s does not exist!\n", dbpath);
     exit(1);
   }
-  int cmdlen = strlen(CMDIPLINK) + strlen(args->netinterface) + 1;
+  int cmdlen = strlen(CMDIPLINK) + strlen(dargs->netinterface) + 1;
   char *cmd = (char *)calloc(cmdlen, sizeof(cmd));
   strcpy(cmd, CMDIPLINK);
-  strcat(cmd, args->netinterface);
+  strcat(cmd, dargs->netinterface);
 
   struct netdata netdata = {-1, -1, time(NULL)};
   log_info("Command %s.", cmd);
   /* Convert rotate to minute*/
-  long long ntick = (args->rotate * 60) / args->period;
+  long long ntick = (dargs->rotate * 60) / dargs->period;
   log_info("N tick %lld.", ntick);
   long long cnt = 0;
 
@@ -199,16 +200,16 @@ bool daemod_run(arguments *args) {
       fprintf(fp, "sumMiB: %lld \n", sumMiB);
     }
 
-    if (!limflag && (sumMiB * MiB >= args->limMiB) &&
-        (NULL != args->commandstr)) {
-      do_internal_cmd(args->commandstr);
+    if (!limflag && (sumMiB * MiB >= dargs->limMiB) &&
+        (NULL != dargs->commandstr)) {
+      do_internal_cmd(dargs->commandstr);
       limflag = !limflag;
     }
 
     fprintf(fp, "%d: Time: %d \t RX: %lld \t  TX: %lld \n", cnt, netdata.now,
             netdata.RX, netdata.TX);
 
-    if (!write_to_db(db, args->dbfile, netdata.now, netdata.RX, netdata.TX,
+    if (!write_to_db(db, dbpath, netdata.now, netdata.RX, netdata.TX,
                      &msg)) {
       fprintf(fp, "Error: %s\n", msg);
       sqlite3_close(db);
@@ -216,7 +217,7 @@ bool daemod_run(arguments *args) {
     } else {
       fprintf(fp, "Write to db is success.\n");
     }
-    sleep(args->period);
+    sleep(dargs->period);
     if (cnt >= ntick)
       break;
     fflush(fp);
