@@ -125,3 +125,8 @@ bool write_to_db(sqlite3 *db, char *db_name, time_t _time, long long rx,
     }
     return true;
 }
+
+bool create_db(char *db_name, char **err_msg)
+{
+    return true;
+}

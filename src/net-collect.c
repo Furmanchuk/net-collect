@@ -29,6 +29,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
 
 static const char *DATE_FORMAT = "%Y %m %d %H:%M:%S";
 
@@ -42,7 +43,9 @@ enum run_mode {
     /** Daemon mode running */
     RM_DAEMON,
     /** Statistics mode running */
-    RM_STAT };
+    RM_STAT,
+    /** Create table mode running */
+    RM_CREATE};
 
 /**
  * Collected main parameters after parse.
@@ -71,6 +74,8 @@ enum error {
   AE_CVGERR,   /* Convergence error                                */
   AE_MPERR,    /* Mode parser error                                */
   AE_NODBS,    /* No database specified                            */
+  AE_FNEERR,   /* File does not exist                              */
+  AE_FAEERR,   /* File already not exist                           */
   AE_NPIFS,    /* No interface specified                           */
   __AE_LAST    /* Last item. So that array sizes match everywhere  */
 };
@@ -83,6 +88,8 @@ static const char *const error_msg[] = {[AE_OK] = "",
                                         [AE_CVGERR] = "Convergence unreachable",
                                         [AE_MPERR] = "Wrong mode",
                                         [AE_NODBS] = "No database specified",
+                                        [AE_FNEERR] = "File does not exist",
+                                        [AE_FAEERR] = "File already not exist ",
                                         [AE_NPIFS] = "No interface specified",
                                         [__AE_LAST] = NULL};
 
@@ -99,168 +106,203 @@ static struct argp_option options[] = {
     {0, 0, 0, 0,
      "The following options should be grouped together in daemon mode:"},
     {"interface", 'i', "NAME", 0, "Network interface name"},
-    {"period", 'p', "SECOND", OPTION_ARG_OPTIONAL,
+    {"period", 'p', "SECOND", 0,
      "The period of writing data "},
-    {"rotate", 'r', "MINUTE", OPTION_ARG_OPTIONAL, "Running time"},
-    {"limit", 'l', "MiB", OPTION_ARG_OPTIONAL, "Data limit"},
-    {"cmd", 'c', "STRING", OPTION_ARG_OPTIONAL, "Internal command"},
+    {"rotate", 'r', "MINUTE", 0, "Running time"},
+    {"limit", 'l', "MiB", 0, "Data limit"},
+    {"cmd", 'c', "STRING", 0, "Internal command"},
     {0, 0, 0, 0,
      "The following options should be grouped together in statistics mode:"},
-    {"from", 'f', "DATE", OPTION_ARG_OPTIONAL,
+    {"from", 'f', "DATE", 0,
      "From which date. Format[YYYY MM DD HH:MM:SS]"},
-    {"to", 't', "DATE", OPTION_ARG_OPTIONAL,
+    {"to", 't', "DATE", 0,
      "Until which date. Format[YYYY MM DD HH:MM:SS]"},
     {0}};
 
 // mode of run anction
 
 static const char *const run_mode_str[] = {
-    [RM_DAEMON] = "daemon", [RM_STAT] = "stat"};
+    [RM_DAEMON] = "daemon",
+    [RM_STAT] = "stat",
+    [RM_CREATE] = "create"
+};
 
-static inline bool ld_conv(const char *str, long long *dstptr) {
-  char etc;
-  log_dbg("in conv");
-  return (sscanf(str, "%lld%c", dstptr, &etc) == 1) && (0 < *dstptr);
+static inline bool ld_conv(const char *str, long long *dstptr)
+{
+    char etc;
+    log_dbg("in conv");
+    return (sscanf(str, "%lld%c", dstptr, &etc) == 1) && (0 < *dstptr);
 }
 
-static bool time_conv(const char *str, time_t *t) {
-  struct tm tm;
-  char *s = strptime(str, DATE_FORMAT, &tm);
-  if (NULL == s)
+static bool time_conv(const char *str, time_t *t)
+{
+    struct tm tm;
+        char *s = strptime(str, DATE_FORMAT, &tm);
+    if (NULL == s)
     return false;
-  return (-1 != (*t = mktime(&tm)));
+    return (-1 != (*t = mktime(&tm)));
 }
 
-static bool mode_parser(const char *str, enum run_mode *mode) {
-  if (!strcmp(str, run_mode_str[RM_DAEMON])) {
-    *mode = RM_DAEMON;
-    return true;
-  } else if (!strcmp(str, run_mode_str[RM_STAT])) {
-    *mode = RM_STAT;
-    return true;
-  }
-  return false;
-}
-
-void err_report(enum error err, struct argp_state *state) {
-  fprintf(stderr, "Error: %s.\n", error_msg[err]);
-  argp_usage(state);
-}
-
-static error_t parse_opt(int key, char *arg, struct argp_state *state) {
-  arguments *args = state->input;
-  switch (key) {
-  case 'd':
-    args->dbfile = arg;
-    log_dbg("DataBase file %s", arg);
-    break;
-  case 'i':
-    args->dargs.netinterface = arg;
-    log_dbg("Network interface name %s", arg);
-    break;
-  case 'p':;
-    long long period;
-    if (!ld_conv(arg, &period) || ((long long)period < 0))
-      err_report(AE_CVGERR, state); // return
-    args->dargs.period = period;
-    log_dbg("Update interval %d[second]", period);
-    break;
-  case 'r':;
-    long long rotate;
-    if (!ld_conv(arg, &rotate) || ((long long)rotate < 0)) {
-      err_report(AE_CVGERR, state);
+static bool mode_parser(const char *str, enum run_mode *mode)
+{
+    if (!strcmp(str, run_mode_str[RM_DAEMON])) {
+        *mode = RM_DAEMON;
+        return true;
+    } else if (!strcmp(str, run_mode_str[RM_STAT])) {
+        *mode = RM_STAT;
+        return true;
+    } else if (!strcmp(str, run_mode_str[RM_CREATE])) {
+        *mode = RM_CREATE;
+        return true;
     }
-    args->dargs.rotate = rotate;
-    log_dbg("Update rotete period %d [minute]", rotate);
-    break;
-  case 'l':;
-    long long limMiB;
-    if (!ld_conv(arg, &limMiB) || ((long long)limMiB < 0))
-      err_report(AE_CVGERR, state); // return
-    args->dargs.limMiB = limMiB;
-    log_dbg("Limit %lld [MiB]", limMiB);
-    break;
-  case 'c':
-    args->dargs.commandstr = arg;
-    log_dbg("Internal command %s", arg);
-    break;
-  case 'f':;
-    time_t from;
-    if (!time_conv(arg, &from))
-      err_report(AE_CVGERR, state);
-    args->from = from;
-    log_dbg("from date %ld", from);
-    break;
-  case 't':;
-    time_t to;
-    if (!time_conv(arg, &to))
-      err_report(AE_CVGERR, state);
-    log_dbg("to date %ld", to);
-    args->to = to;
-    break;
-  case ARGP_KEY_NO_ARGS:
-    err_report(AE_NOARGS, state);
-  case ARGP_KEY_ARG:
-    if (state->arg_num > 0)
-      err_report(AE_TMARGS, state);
+    return false;
+}
 
-    enum run_mode mode;
-    if (!mode_parser(arg, &mode))
-      err_report(AE_MPERR, state);
-    args->mode = mode;
-    log_dbg("Mode arg %s", arg);
-    break;
-  default:
-    return ARGP_ERR_UNKNOWN;
-  }
-  return 0;
+static error_t parse_opt(int key, char *arg, struct argp_state *state)
+{
+    void err_report(enum error err, struct argp_state *state)
+    {
+        fprintf(stderr, "Error: %s.\n", error_msg[err]);
+        argp_usage(state);
+    }
+
+    arguments *args = state->input;
+    switch (key) {
+    case 'd':
+        args->dbfile = arg;
+        log_dbg("DataBase file %s", arg);
+        break;
+    case 'i':
+        args->dargs.netinterface = arg;
+        log_dbg("Network interface name %s", arg);
+        break;
+    case 'p':;
+        long long period;
+        if (!ld_conv(arg, &period) || ((long long)period < 0))
+            err_report(AE_CVGERR, state); // return
+        args->dargs.period = period;
+        log_dbg("Update interval %d[second]", period);
+        break;
+    case 'r':;
+        long long rotate;
+        if (!ld_conv(arg, &rotate) || ((long long)rotate < 0)) {
+            err_report(AE_CVGERR, state);
+        }
+        args->dargs.rotate = rotate;
+        log_dbg("Update rotete period %d [minute]", rotate);
+        break;
+    case 'l':;
+        long long limMiB;
+        if (!ld_conv(arg, &limMiB) || ((long long)limMiB < 0))
+            err_report(AE_CVGERR, state); // return
+        args->dargs.limMiB = limMiB;
+        log_dbg("Limit %lld [MiB]", limMiB);
+        break;
+    case 'c':
+        args->dargs.commandstr = arg;
+        log_dbg("Internal command %s", arg);
+        break;
+    case 'f':;
+        time_t from;
+        if (!time_conv(arg, &from))
+            err_report(AE_CVGERR, state);
+        args->from = from;
+        log_dbg("from date %ld", from);
+        break;
+    case 't':;
+        time_t to;
+        if (!time_conv(arg, &to))
+            err_report(AE_CVGERR, state);
+        log_dbg("to date %ld", to);
+        args->to = to;
+        break;
+    case ARGP_KEY_NO_ARGS:
+        err_report(AE_NOARGS, state);
+    case ARGP_KEY_ARG:
+        if (state->arg_num > 0)
+            err_report(AE_TMARGS, state);
+
+        enum run_mode mode;
+        if (!mode_parser(arg, &mode))
+            err_report(AE_MPERR, state);
+        args->mode = mode;
+        log_dbg("Mode arg %s", arg);
+        break;
+    default:
+        return ARGP_ERR_UNKNOWN;
+    }
+      return 0;
 }
 
 static char args_doc[] = "MODE [daemon] \nMODE [stat]";
 
 static struct argp argp = {options, parse_opt, args_doc, doc};
 
-bool args_parce(int argc, char *argv[], arguments *args) {
+bool args_parce(int argc, char *argv[], arguments *args)
+{
+    void err_report(char progname, enum error err)
+    {
+        fprintf(stderr, "Error: %s.\n", error_msg[err]);
+        fprintf(stderr, USAGE, progname);
+    }
+
   /*Set default values*/
-  args->dbfile = NULL;
-  args->dargs.period = 5;
-  args->dargs.rotate = 1;
-  args->dargs.netinterface = NULL;
-  args->from = 0;
-  args->to = 0;
-  bool ret = argp_parse(&argp, argc, argv, 0, 0, args) == 0;
+    args->dbfile = NULL;
+    args->dargs.period = 5;
+    args->dargs.rotate = 1;
+    args->dargs.netinterface = NULL;
+    args->from = 0;
+    args->to = 0;
+    bool ret = argp_parse(&argp, argc, argv, 0, 0, args) == 0;
 
-  char *progname = basename(argv[0]);
-  if (NULL == args->dbfile) {
-    fprintf(stderr, "Error: %s. \n", error_msg[AE_NODBS]);
-    fprintf(stderr, USAGE, progname);
-    exit(AE_NODBS);
-  }
-  if ((NULL == args->dargs.netinterface) && (RM_STAT != args->mode)) {
-    log_err("Error: %s", error_msg[AE_NPIFS]);
-    fprintf(stderr, "Error: %s.\n", error_msg[AE_NPIFS]);
-    fprintf(stderr, USAGE, progname);
-    exit(AE_NPIFS);
-  }
-  log_dbg("==================");
-  log_dbg("Out db: %s", args->dbfile);
-  log_dbg("Out mode: %d", args->mode);
-  log_dbg("Out period: %lld", args->dargs.period);
-  log_dbg("Out rotate: %lld", args->dargs.rotate);
-  log_dbg("Out ninterf: %s", args->dargs.netinterface);
-  log_dbg("Out limDB: %lld", args->dargs.limMiB);
-  log_dbg("Out cmd: %s", args->dargs.commandstr);
-  log_dbg("Out from: %ld", args->from);
-  log_dbg("Out to: %ld", args->to);
+    char *progname = basename(argv[0]);
+    if (NULL == args->dbfile) {
+        fprintf(stderr, "Error: %s. \n", error_msg[AE_NODBS]);
+        fprintf(stderr, USAGE, progname);
+        exit(1);
+    }
+  //
+    switch (args->mode) {
+    case RM_DAEMON:
+        if (NULL == args->dargs.netinterface){
+            fprintf(stderr, "Error: %s.\n", error_msg[AE_NPIFS]);
+        }else if (access(args->dbfile, F_OK) == -1) {
+              fprintf(stderr, "Error: %s.\n", error_msg[AE_FNEERR]);
+              exit(1);
+        }
+        break;
+    case RM_STAT:
+        if (access(args->dbfile, F_OK) == -1) {
+          fprintf(stderr, "Error: %s.\n", error_msg[AE_FNEERR]);
+          exit(1);
+        }
+        break;
+    case RM_CREATE:
+        if (!access(args->dbfile, F_OK) == -1) {
+          fprintf(stderr, "Error: %s.\n", error_msg[AE_FAEERR]);
+          exit(1);
+        break;
+        }
+    }
+    log_dbg("==================");
+    log_dbg("Out db: %s", args->dbfile);
+    log_dbg("Out mode: %d", args->mode);
+    log_dbg("Out period: %lld", args->dargs.period);
+    log_dbg("Out rotate: %lld", args->dargs.rotate);
+    log_dbg("Out ninterf: %s", args->dargs.netinterface);
+    log_dbg("Out limDB: %lld", args->dargs.limMiB);
+    log_dbg("Out cmd: %s", args->dargs.commandstr);
+    log_dbg("Out from: %ld", args->from);
+    log_dbg("Out to: %ld", args->to);
 
-  return ret;
+    return ret;
 }
 
 int main(int argc, char *argv[])
 {
     arguments arguments;
     if (!args_parce(argc, argv, &arguments))
-        fprintf(stderr, "%s\n", "Error: Pasing failture");
+        fprintf(stderr, "Error: Pasing failture\n");
 
     switch (arguments.mode) {
     case RM_DAEMON:
@@ -269,7 +311,19 @@ int main(int argc, char *argv[])
         break;
     case RM_STAT:
         log_info("Statistics mode is selected.");
-        print_db_table(arguments.dbfile, arguments.from, arguments.to);
+        if (!print_db_table(arguments.dbfile, arguments.from, arguments.to)){
+            fprintf(stderr, "%s\n", "Error: Failed to print database.");
+            return 1;
+        }
+        break;
+    case RM_CREATE:
+        log_info("Create db mode is selected.");
+        char *msg;
+        if (!create_db(arguments.dbfile, &msg)){
+            fprintf(stderr, "%s\n", "Error: Failed to create database.");
+            fprintf(stderr, "%s\n", "SQLite error: %s", msg);
+            return 1;
+        }
         break;
     }
     return 0;

@@ -139,35 +139,31 @@ void do_internal_cmd(char *cmd)
 
 void daemod_run(char *dbpath, struct dargs *dargs)
 {
-  if (access(dbpath, F_OK) == -1) {
-    fprintf(stderr, "File: %s does not exist!\n", dbpath);
-    exit(1);
-  }
-  int cmdlen = strlen(CMDIPLINK) + strlen(dargs->netinterface) + 1;
-  char *cmd = (char *)calloc(cmdlen, sizeof(cmd));
-  strcpy(cmd, CMDIPLINK);
-  strcat(cmd, dargs->netinterface);
+    int cmdlen = strlen(CMDIPLINK) + strlen(dargs->netinterface) + 1;
+    char *cmd = (char *)calloc(cmdlen, sizeof(cmd));
+    strcpy(cmd, CMDIPLINK);
+    strcat(cmd, dargs->netinterface);
 
-  struct netdata netdata = {-1, -1, time(NULL)};
-  log_info("Command %s.", cmd);
-  /* Convert rotate to minute*/
-  long long ntick = (dargs->rotate * 60) / dargs->period;
-  log_info("N tick %lld.", ntick);
-  long long cnt = 0;
+    struct netdata netdata = {-1, -1, time(NULL)};
+    log_info("Command %s.", cmd);
+    /* Convert rotate to minute*/
+    long long ntick = (dargs->rotate * 60) / dargs->period;
+    log_info("N tick %lld.", ntick);
+    long long cnt = 0;
 
-  char *msg;
-  sqlite3 *db;
+    char *msg;
+    sqlite3 *db;
 
-  struct netdata buffdata[2];
-  buffdata[0] = netdata;
-  long long sumMiB = 0;
-  bool limflag = false;
+    struct netdata buffdata[2];
+    buffdata[0] = netdata;
+    long long sumMiB = 0;
+    bool limflag = false;
 
-  log_info("cmd>> %s", cmd);
-  init_daemon();
-  FILE *fp = NULL;
-  fp = fopen("daemonlog.log", "w+");
-  while (1) {
+    log_info("cmd>> %s", cmd);
+    init_daemon();
+    FILE *fp = NULL;
+    fp = fopen("daemonlog.log", "w+");
+    while (1) {
     cnt++;
     if (!collect_stat(cmd, &netdata)) {
       fprintf(fp, "Failture collect_stat \n");
