@@ -85,7 +85,7 @@ bool parce_cmd_out(char **outcmd, struct netdata *data)
 
 bool init_daemon(void)
 {
-    pid_t pid = 0, sid = 0;
+    pid_t pid = 0;
     pid = fork();
     if (pid < 0)
         return false;
@@ -182,13 +182,13 @@ void daemod_run(char *dbpath, struct dargs *dargs)
         fprintf(fp, "sumMiB: %lld \n", sumMiB);
     }
 
-    if (!limflag && (sumMiB * MiB >= dargs->limMiB) &&
+    if (!limflag && ((sumMiB * MiB) >= dargs->limMiB) &&
         (NULL != dargs->commandstr)) {
         do_internal_cmd(dargs->commandstr);
         limflag = !limflag;
     }
 
-    fprintf(fp, "%d: Time: %d \t RX: %lld \t  TX: %lld \n", cnt, netdata.now,
+    fprintf(fp, "%lld: Time: %ld \t RX: %lld \t  TX: %lld \n", cnt, netdata.now,
             netdata.RX, netdata.TX);
 
     if (!write_to_db(db, dbpath, netdata.now, netdata.RX, netdata.TX,
