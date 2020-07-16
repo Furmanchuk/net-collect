@@ -27,9 +27,11 @@
 
 #define N_BUFF 20
 
-static long double MiB = 9.53674E-7;
-
 static const char *DATE_FORMAT = "%Y %m %d %H:%M:%S";
+
+static const char *const SQL_QUERY_CREATE_TABLE =
+    ("CREATE TABLE " DB_TABLE " (" ID_FLD " INTEGER PRIMARY KEY NOT NULL,"
+    TIME_FLD " INTEGER," RX_FLD " INTEGER ," TX_FLD " INTEGER );");
 
 static const char *const SQL_QUERY_SELECT =
     ("SELECT * FROM " DB_TABLE " ORDER BY " TIME_FLD ";");
@@ -128,5 +130,24 @@ bool write_to_db(sqlite3 *db, char *db_name, time_t _time, long long rx,
 
 bool create_db(char *db_name, char **err_msg)
 {
+    log_dbg("Database path %s", db_name);
+    sqlite3 *db;
+    char *e_msg;
+    if (SQLITE_OK != (sqlite3_open(db_name, &db))){
+        *e_msg = strdup(sqlite3_errmsg(db));
+        fprintf(stderr, "Cannot open database: %s\n", *e_msg);
+        sqlite3_close(db);
+        return false;
+    }
+    char *sql = SQL_QUERY_CREATE_TABLE;
+    log_dbg("SQL query: %s", sql);
+	/* Execute SQL statement */
+    int rc = sqlite3_exec(db, sql, 0, 0, &e_msg);
+	if(SQLITE_OK != rc){
+        fprintf(stderr, "Cannot execute \n");
+        log_err("Cannot execute: %s", sql);
+        return false;
+    }
+    sqlite3_close(db);
     return true;
 }

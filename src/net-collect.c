@@ -75,7 +75,7 @@ enum error {
   AE_MPERR,    /* Mode parser error                                */
   AE_NODBS,    /* No database specified                            */
   AE_FNEERR,   /* File does not exist                              */
-  AE_FAEERR,   /* File already not exist                           */
+  AE_FAEERR,   /* File already exist                           */
   AE_NPIFS,    /* No interface specified                           */
   __AE_LAST    /* Last item. So that array sizes match everywhere  */
 };
@@ -89,7 +89,7 @@ static const char *const error_msg[] = {[AE_OK] = "",
                                         [AE_MPERR] = "Wrong mode",
                                         [AE_NODBS] = "No database specified",
                                         [AE_FNEERR] = "File does not exist",
-                                        [AE_FAEERR] = "File already not exist ",
+                                        [AE_FAEERR] = "File already exist ",
                                         [AE_NPIFS] = "No interface specified",
                                         [__AE_LAST] = NULL};
 
@@ -222,7 +222,7 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state)
         if (state->arg_num > 0)
             err_report(AE_TMARGS, state);
 
-        enum run_mode mode;
+        enum run_mode mode = -1;
         if (!mode_parser(arg, &mode))
             err_report(AE_MPERR, state);
         args->mode = mode;
@@ -234,13 +234,13 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state)
       return 0;
 }
 
-static char args_doc[] = "MODE [daemon] \nMODE [stat]";
+static char args_doc[] = "MODE [daemon] \nMODE [stat]\nMODE [create]";
 
 static struct argp argp = {options, parse_opt, args_doc, doc};
 
 bool args_parce(int argc, char *argv[], arguments *args)
 {
-    void err_report(char progname, enum error err)
+    void err_report(char *progname, enum error err)
     {
         fprintf(stderr, "Error: %s.\n", error_msg[err]);
         fprintf(stderr, USAGE, progname);
@@ -257,30 +257,31 @@ bool args_parce(int argc, char *argv[], arguments *args)
 
     char *progname = basename(argv[0]);
     if (NULL == args->dbfile) {
-        fprintf(stderr, "Error: %s. \n", error_msg[AE_NODBS]);
-        fprintf(stderr, USAGE, progname);
+        err_report(progname, AE_NODBS);
         exit(1);
     }
   //
     switch (args->mode) {
     case RM_DAEMON:
         if (NULL == args->dargs.netinterface){
-            fprintf(stderr, "Error: %s.\n", error_msg[AE_NPIFS]);
+            err_report(progname, AE_NPIFS);
+            exit(1);
         }else if (access(args->dbfile, F_OK) == -1) {
-              fprintf(stderr, "Error: %s.\n", error_msg[AE_FNEERR]);
-              exit(1);
+            err_report(progname, AE_FNEERR);
+            exit(1);
         }
         break;
     case RM_STAT:
         if (access(args->dbfile, F_OK) == -1) {
-          fprintf(stderr, "Error: %s.\n", error_msg[AE_FNEERR]);
-          exit(1);
+            err_report(progname, AE_FNEERR);
+            exit(1);
         }
         break;
     case RM_CREATE:
-        if (!access(args->dbfile, F_OK) == -1) {
-          fprintf(stderr, "Error: %s.\n", error_msg[AE_FAEERR]);
-          exit(1);
+        log_dbg("mode: %s", run_mode_str[RM_CREATE]);
+        if (access(args->dbfile, F_OK) == 0) {
+            err_report(progname, AE_FAEERR);
+            exit(1);
         break;
         }
     }
@@ -321,9 +322,10 @@ int main(int argc, char *argv[])
         char *msg;
         if (!create_db(arguments.dbfile, &msg)){
             fprintf(stderr, "%s\n", "Error: Failed to create database.");
-            fprintf(stderr, "%s\n", "SQLite error: %s", msg);
+            //fprintf(stderr, "SQLite error: %s\n", msg);
             return 1;
         }
+        log_info("Database created.");
         break;
     }
     return 0;
