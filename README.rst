@@ -21,7 +21,8 @@ Building and compiling use the *Makefile*
 
 Using example
 -----------------------------------------------------------------------
-- To run progrm in daemon mode:
+
+- To run program in daemon mode:
 
 .. code-block:: bash
 
@@ -39,7 +40,14 @@ Using example
     # or print for the specified time
     ./net-collect stat --db=dbpath.db --from="2020 07 14 18:30:00" --to="2020 07 14 20:40:00"
 
-You can use a test database: https://github.com/Furmanchuk/net-collect/tree/dev/testdb
+- To run program in create mode: 
+
+.. code-block:: bash
+
+    # create database file
+    ./net-collect create --db=somedbfile.db
+
+The test database is located in a folder: *testdb*
 
 LICENCE
 -----------------------------------------------------------------------
