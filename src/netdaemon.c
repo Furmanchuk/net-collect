@@ -152,7 +152,7 @@ void daemod_run(char *dbpath, struct dargs *dargs)
     long long cnt = 0;
 
     char *msg;
-    sqlite3 *db;
+    sqlite3 *db = NULL;
 
     struct netdata buffdata[2];
     buffdata[0] = netdata;
@@ -191,7 +191,7 @@ void daemod_run(char *dbpath, struct dargs *dargs)
     fprintf(fp, "%lld: Time: %ld \t RX: %lld \t  TX: %lld \n", cnt, netdata.now,
             netdata.RX, netdata.TX);
 
-    if (!write_to_db(db, dbpath, netdata.now, netdata.RX, netdata.TX,
+    if (CE_OK != write_to_db(db, dbpath, netdata.now, netdata.RX, netdata.TX,
                      &msg)) {
         fprintf(fp, "Error: %s\n", msg);
         sqlite3_close(db);

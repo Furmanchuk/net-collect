@@ -22,6 +22,7 @@
 
 #include <stdio.h>
 
+
 #include <argp.h>
 #include <libgen.h>
 #include <stdbool.h>
@@ -117,7 +118,8 @@ static struct argp_option options[] = {
      "From which date. Format[YYYY MM DD HH:MM:SS]"},
     {"to", 't', "DATE", 0,
      "Until which date. Format[YYYY MM DD HH:MM:SS]"},
-    {0}};
+    {0}
+};
 
 // mode of run anction
 
@@ -181,7 +183,7 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state)
         if (!ld_conv(arg, &period) || ((long long)period < 0))
             err_report(AE_CVGERR, state); // return
         args->dargs.period = period;
-        log_dbg("Update interval %d[second]", period);
+        log_dbg("Update interval %lld[second]", period);
         break;
     case 'r':;
         long long rotate;
@@ -189,7 +191,7 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state)
             err_report(AE_CVGERR, state);
         }
         args->dargs.rotate = rotate;
-        log_dbg("Update rotete period %d [minute]", rotate);
+        log_dbg("Update rotete period %lld [minute]", rotate);
         break;
     case 'l':;
         long long limMiB;
@@ -218,6 +220,7 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state)
         break;
     case ARGP_KEY_NO_ARGS:
         err_report(AE_NOARGS, state);
+        break;
     case ARGP_KEY_ARG:
         if (state->arg_num > 0)
             err_report(AE_TMARGS, state);
@@ -312,7 +315,7 @@ int main(int argc, char *argv[])
         break;
     case RM_STAT:
         log_info("Statistics mode is selected.");
-        if (!print_db_table(arguments.dbfile, arguments.from, arguments.to)){
+        if (CE_OK != print_db_table(arguments.dbfile, arguments.from, arguments.to)){
             fprintf(stderr, "%s\n", "Error: Failed to print database.");
             return 1;
         }
@@ -320,7 +323,7 @@ int main(int argc, char *argv[])
     case RM_CREATE:
         log_info("Create db mode is selected.");
         char *msg;
-        if (!create_db(arguments.dbfile, &msg)){
+        if (CE_OK != create_db(arguments.dbfile, &msg)){
             fprintf(stderr, "%s\n", "Error: Failed to create database.");
             //fprintf(stderr, "SQLite error: %s\n", msg);
             return 1;
