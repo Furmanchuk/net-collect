@@ -4,7 +4,6 @@ TARGET ?= net-collect
 INCDIRS = ./inc
 SRCDIR = ./src
 SRCS := $(TARGET).c
-#SRCS += argparser.c
 SRCS += netdaemon.c
 SRCS += collectdb.c
 BUILDDIR = ./.build
@@ -12,7 +11,7 @@ BUILDDIR = ./.build
 
 CC = gcc
 CFLAGS := -O2 -std=gnu18 -fms-extensions 
-#CFLAGS += -Wall -Wextra -Wpedantic
+CFLAGS += -Wall -Wextra -Wpedantic
 CFLAGS += -DDEBUG=$(DEBUG)
 LDFLAGS := -lsqlite3
 

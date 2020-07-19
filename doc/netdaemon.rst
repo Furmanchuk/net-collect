@@ -1,4 +1,4 @@
-NetDaemon -- module for wtite statistic data to datebase
+NetDaemon -- module for write data to datebase
 ==========================================================
 
 .. c:autodoc:: inc/netdaemon.h
