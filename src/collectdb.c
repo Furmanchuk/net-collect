@@ -8,6 +8,7 @@
  * License:
  * The MIT License (MIT)
  */
+//test
 #include <stdio.h>
 
 #include "collectdb.h"
